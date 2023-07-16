@@ -1,6 +1,8 @@
 import fs from 'fs'; //file system controller duh
 import fetch from 'node-fetch'; // Import the fetch function from the 'node-fetch' package
-import Gpio from 'onoff'; //gpio pin controller
+// import { Gpio } from 'onoff';//gpio pin controller
+
+
 
 class PaymentTracker { //main program lol
   constructor() {
@@ -41,7 +43,7 @@ class PaymentTracker { //main program lol
       const newPaymentStatus = lastPayment.status;
       const newPaymentSourceType = lastPayment.source_type;
       const newPaymentLast4 = this.getLast4Digits(newPaymentId);
-      
+
       if (newPaymentId !== this.previousPaymentId) {
         const oldPaymentDetails = {
           status: this.previousPaymentStatus,
@@ -72,6 +74,7 @@ class PaymentTracker { //main program lol
   
           if (newPaymentStatus === 'FAILED' || newPaymentStatus === 'CANCELED') {
             this.logPaymentDetails(oldPaymentDetails, newPaymentDetails, this.isMosfetTriggered);
+            this.logFailedPayment(newPaymentId, new Date().toISOString(), newPaymentStatus);
           }
         }
 
@@ -79,13 +82,13 @@ class PaymentTracker { //main program lol
         const oldPaymentStatus = this.previousPaymentStatus;
         const oldPaymentSourceType = this.previousPaymentSourceType;
         const oldPaymentLast4 = this.lastPaymentLast4;
-
+  
         this.previousPaymentId = newPaymentId;
         this.previousPaymentStatus = newPaymentStatus;
         this.previousPaymentSourceType = newPaymentSourceType;
         this.lastPaymentId = newPaymentId;
         this.lastPaymentLast4 = newPaymentLast4;
-
+  
         const paymentData = {
           newPaymentId: this.getShortenedId(newPaymentId),
           oldPaymentId: this.getShortenedId(oldPaymentId),
@@ -109,6 +112,15 @@ class PaymentTracker { //main program lol
     }
   }
 
+  logFailedPayment(paymentId, timestamp, status) {
+    const logEntry = {
+      paymentId: paymentId,
+      timestamp: timestamp,
+      status: status
+    };
+  
+    fs.appendFileSync('log.json', JSON.stringify(logEntry) + '\n');
+  }
   getShortenedId(paymentId) {
     if (paymentId !== null) {
       return paymentId.slice(-6);
@@ -143,23 +155,40 @@ class PaymentTracker { //main program lol
   }
 }
 
+// import { Gpio } from 'onoff';
+
+// import { Gpio } from 'rpi-gpio';
+
+import rpiGpio from 'rpi-gpio';
+
+
 class MosfetControl {
   constructor() {
-    this.pin1 = new Gpio(1, 'out'); // Use GPIO pin 1 (Physical pin 28) for Mosfet trigger
-    this.pin12 = new Gpio(12, 'out'); // Use GPIO pin 12 (Physical pin 32) for failed payment trigger
+    this.pin1 = new rpiGpio.default.Gpio(1, { mode: rpiGpio.default.OUTPUT }); // Use GPIO pin 1 for Mosfet trigger
+    this.pin12 = new rpiGpio.default.Gpio(12, { mode: rpiGpio.default.OUTPUT }); // Use GPIO pin 12 for failed payment trigger
   }
 
+
   triggerPin1() {
-    this.pin1.writeSync(1); // Set GPIO pin 1 to HIGH
-    console.log('Payment ID changed. Triggering MosfetControl for GPIO pin 1...');
+    this.pin1.write(1, (err) => {
+      if (err) {
+        console.error('Error triggering MosfetControl for GPIO pin 1:', err);
+      } else {
+        console.log('Payment ID changed. Triggering MosfetControl for GPIO pin 1...');
+      }
+    });
   }
 
   triggerPin12() {
-    this.pin12.writeSync(1); // Set GPIO pin 12 to HIGH
-    console.log('Payment status changed to CANCELED or FAILED. Triggering MosfetControl for GPIO pin 12...');
+    this.pin12.write(1, (err) => {
+      if (err) {
+        console.error('Error triggering MosfetControl for GPIO pin 12:', err);
+      } else {
+        console.log('Payment status changed to CANCELED or FAILED. Triggering MosfetControl for GPIO pin 12...');
+      }
+    });
   }
 }
-
 
 const paymentTracker = new PaymentTracker();
 paymentTracker.startTracking();
