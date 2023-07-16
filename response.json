@@ -1,0 +1,11 @@
+{
+  "newPaymentId": "aMcLZY",
+  "oldPaymentId": "null",
+  "newPaymentStatus": "FAILED",
+  "oldPaymentStatus": null,
+  "newPaymentSourceType": "CARD",
+  "oldPaymentSourceType": null,
+  "newPaymentLast4": "cLZY",
+  "oldPaymentLast4": null,
+  "isMosfetTriggered": false
+}
