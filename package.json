@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "node-fetch": "^3.3.1",
+    "onoff": "^6.0.3",
+    "rpi-gpio": "^2.1.7",
+    "square": "^28.0.1"
+  }
+}
