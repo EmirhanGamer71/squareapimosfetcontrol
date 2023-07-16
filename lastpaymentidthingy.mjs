@@ -1,17 +1,18 @@
-import fs from 'fs';
+import fs from 'fs'; //file system controller duh
 import fetch from 'node-fetch'; // Import the fetch function from the 'node-fetch' package
+import Gpio from 'onoff'; //gpio pin controller
 
-class PaymentTracker {
+class PaymentTracker { //main program lol
   constructor() {
-    const config = this.readConfigFile();
-    this.accessToken = config.SQUARE_ACCESS_TOKEN;
-    this.apiUrl = 'https://connect.squareupsandbox.com/v2/payments';
-    this.previousPaymentId = null;
-    this.previousPaymentStatus = null;
-    this.previousPaymentSourceType = null;
+    const config = this.readConfigFile(); //reads config 
+    this.accessToken = config.SQUARE_ACCESS_TOKEN; //takes token from config to put here CHANGE THE TOKEN IN CONFIG BEFORE USAGE 
+    this.apiUrl = 'https://connect.squareupsandbox.com/v2/payments'; //if it is connect.squareupsandbox.com then it is sandbox (no shit sherlock)
+    this.previousPaymentId = null; //payment id 
+    this.previousPaymentStatus = null; //status of the payment
+    this.previousPaymentSourceType = null; //what kind of payment type used like card gift card etc
     this.lastPaymentId = null;
     this.lastPaymentLast4 = null;
-    this.mosfetControl = new MosfetControl();
+    this.mosfetControl = new MosfetControl(); 
     this.isMosfetTriggered = false; // Add a new property to track if Mosfet has been triggered
   }
   readConfigFile() {
@@ -40,19 +41,38 @@ class PaymentTracker {
       const newPaymentStatus = lastPayment.status;
       const newPaymentSourceType = lastPayment.source_type;
       const newPaymentLast4 = this.getLast4Digits(newPaymentId);
-
+      
       if (newPaymentId !== this.previousPaymentId) {
-        console.log(`Payment ID changed from ${this.getShortenedId(this.previousPaymentId)} to ${this.getShortenedId(newPaymentId)}`);
+        const oldPaymentDetails = {
+          status: this.previousPaymentStatus,
+          id: this.previousPaymentId,
+          sourceType: this.previousPaymentSourceType,
+          last4: this.previousPaymentLast4
+        };
+  
+        const newPaymentDetails = {
+          status: newPaymentStatus,
+          id: newPaymentId,
+          sourceType: newPaymentSourceType,
+          last4: newPaymentLast4
+        };
+  
         if (
           newPaymentStatus === 'APPROVED' ||
-          newPaymentStatus === 'COMPLETED'
+          newPaymentStatus === 'COMPLETED' ||
+          newPaymentStatus === 'PENDING'
         ) {
-          if (this.previousPaymentId !== null) { // Add this condition
-            this.mosfetControl.trigger();
+          if (this.previousPaymentId !== null) {
+            this.mosfetControl.triggerPin1(); // Trigger GPIO pin 1 (Physical pin 28)
             this.isMosfetTriggered = true;
           }
-        } else {
+        } else if (newPaymentStatus === 'CANCELED' || newPaymentStatus === 'FAILED') {
+          this.mosfetControl.triggerPin12(); // Trigger GPIO pin 12 (Physical pin 32)
           this.isMosfetTriggered = false;
+  
+          if (newPaymentStatus === 'FAILED' || newPaymentStatus === 'CANCELED') {
+            this.logPaymentDetails(oldPaymentDetails, newPaymentDetails, this.isMosfetTriggered);
+          }
         }
 
         const oldPaymentId = this.previousPaymentId;
@@ -114,6 +134,7 @@ class PaymentTracker {
       } else {
         console.log('Payment data saved to response.json');
       }
+      
     });
   }
 
@@ -123,12 +144,22 @@ class PaymentTracker {
 }
 
 class MosfetControl {
-  constructor() {}
+  constructor() {
+    this.pin1 = new Gpio(1, 'out'); // Use GPIO pin 1 (Physical pin 28) for Mosfet trigger
+    this.pin12 = new Gpio(12, 'out'); // Use GPIO pin 12 (Physical pin 32) for failed payment trigger
+  }
 
-  trigger() {
-    console.log('Payment ID changed. Triggering MosfetControl...');
+  triggerPin1() {
+    this.pin1.writeSync(1); // Set GPIO pin 1 to HIGH
+    console.log('Payment ID changed. Triggering MosfetControl for GPIO pin 1...');
+  }
+
+  triggerPin12() {
+    this.pin12.writeSync(1); // Set GPIO pin 12 to HIGH
+    console.log('Payment status changed to CANCELED or FAILED. Triggering MosfetControl for GPIO pin 12...');
   }
 }
+
 
 const paymentTracker = new PaymentTracker();
 paymentTracker.startTracking();
